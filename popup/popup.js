@@ -66,7 +66,7 @@ async function renderSiteCard() {
 // ── Pair ──────────────────────────────────────────────────────────────────────
 
 $('btn-pair').addEventListener('click', async () => {
-  const codeRaw = $('code-input').value.trim();
+  const codeRaw = $('code-input').value.replace(/\s/g, '');
   const errEl = $('pair-error');
   hide(errEl);
 
@@ -114,8 +114,7 @@ $('btn-send-token').addEventListener('click', async () => {
 
   try {
     const url = btn.dataset.url;
-    const { cookies: tokenValue } = await sendBg({ type: 'getTabCookies', url });
-
+    const { cookies: tokenValue } = await sendBg({ type: 'getCookies', url });
     if (!tokenValue) throw new Error('Куки не найдены — попробуй обновить страницу и авторизоваться заново');
 
     await sendBg({ type: 'sendToken', label: host, tokenValue });
@@ -128,6 +127,31 @@ $('btn-send-token').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = 'Передать токен';
   }
+});
+
+// ── Quick capture buttons ─────────────────────────────────────────────────────
+
+document.querySelectorAll('.btn-quick').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const url    = btn.dataset.url;
+    const after  = btn.dataset.after;
+    const label  = btn.dataset.label;
+    const status = $('quick-status');
+
+    btn.disabled = true;
+    status.textContent = `Открываю ${label}…`;
+    show(status);
+
+    try {
+      await sendBg({ type: 'captureUrl', url, captureAfterUrl: after, captureType: 'cookies', label });
+      status.textContent = `✓ Вкладка открыта — залогинься, токен придёт автоматически`;
+    } catch (e) {
+      status.textContent = `Ошибка: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => hide(status), 8000);
+    }
+  });
 });
 
 // ── Disconnect ────────────────────────────────────────────────────────────────

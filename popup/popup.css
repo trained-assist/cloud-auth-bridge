@@ -112,6 +112,35 @@ body {
 
 .no-site { text-align: center; color: var(--muted); font-size: 13px; padding: 6px 0; }
 
+/* ── Quick capture ───────────────────────────────────────────────────────── */
+.quick-capture {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.quick-label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+}
+.quick-buttons {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.btn-quick {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-quick:hover { background: rgba(42,171,238,.15); }
+.btn-quick:disabled { opacity: .5; cursor: default; }
+.hint { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
 /* ── Messages ────────────────────────────────────────────────────────────── */
 .error { color: var(--red); font-size: 12px; text-align: center; }
 .ok    { color: var(--green); font-size: 12px; text-align: center; }

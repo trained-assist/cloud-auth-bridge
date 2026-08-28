@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Alesa Auth",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Передаёт токены авторизации в Telegram-бота Alesa",
 
   "permissions": [
     "storage",
     "activeTab",
     "cookies",
-    "alarms"
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
