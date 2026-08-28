@@ -6,9 +6,10 @@
 
 const DEFAULT_RELAY = 'http://localhost:8081';
 const IDLE_ALARM    = 'alesa-idle-poll';
-const IDLE_PERIOD   = 3;      // минуты (chrome.alarms минимум 1)
-const ACTIVE_MS     = 3000;   // мс между poll в active режиме
-const ACTIVE_TIMEOUT_MS = 2 * 60 * 1000; // 2 мин — максимальное время active режима
+const ACTIVE_ALARM  = 'alesa-active-poll';
+const IDLE_PERIOD   = 3;   // минуты idle polling
+const ACTIVE_PERIOD = 1;   // минуты active polling (MV3 minimum = 1 мин, setInterval ненадёжен)
+const ACTIVE_TIMEOUT_MS = 10 * 60 * 1000; // 10 мин — максимальное время active режима
 
 // ── State helpers ────────────────────────────────────────────────────────────
 
@@ -26,40 +27,27 @@ async function setState(patch) {
 }
 
 // ── Adaptive polling ─────────────────────────────────────────────────────────
+// MV3 Service Workers засыпают через ~30 сек. setInterval ненадёжен.
+// Используем chrome.alarms для обоих режимов:
+//   Idle:   IDLE_ALARM  каждые 3 мин → HEAD /poll
+//   Active: ACTIVE_ALARM каждые 1 мин → GET /poll  (MV3 минимум = 1 мин)
 
-let activeTimer = null;
-let activeStartedAt = null;
-
-// Запустить idle polling (chrome.alarms, 3 мин)
+// Запустить idle polling
 function startIdlePolling() {
-  stopActivePolling();
+  chrome.alarms.clear(ACTIVE_ALARM);
+  chrome.storage.local.remove('activePollingStartedAt');
   chrome.alarms.create(IDLE_ALARM, { periodInMinutes: IDLE_PERIOD });
 }
 
-function stopActivePolling() {
-  if (activeTimer) {
-    clearInterval(activeTimer);
-    activeTimer = null;
-    activeStartedAt = null;
-  }
-}
+// Переключиться в active режим: poll каждые 1 мин
+async function switchToActivePolling() {
+  const existing = await chrome.storage.local.get('activePollingStartedAt');
+  if (existing.activePollingStartedAt) return; // уже активен
 
-// Переключиться в active режим: poll каждые 3 сек, макс 2 мин
-function switchToActivePolling() {
-  if (activeTimer) return; // уже в active
-
-  chrome.alarms.clear(IDLE_ALARM); // пауза idle alarm пока активны
-  activeStartedAt = Date.now();
-
-  activeTimer = setInterval(async () => {
-    // Таймаут active режима
-    if (Date.now() - activeStartedAt > ACTIVE_TIMEOUT_MS) {
-      console.log('[alesa] active poll timeout — back to idle');
-      startIdlePolling();
-      return;
-    }
-    await pollOnce(true);
-  }, ACTIVE_MS);
+  chrome.alarms.clear(IDLE_ALARM);
+  await chrome.storage.local.set({ activePollingStartedAt: Date.now() });
+  chrome.alarms.create(ACTIVE_ALARM, { periodInMinutes: ACTIVE_PERIOD });
+  console.log('[alesa] switched to active polling (1 min)');
 }
 
 // Одна итерация poll.
@@ -77,9 +65,9 @@ async function pollOnce(getCommand = false) {
 
     if (method === 'HEAD') {
       if (res.status === 200) {
-        // Есть команда — переключаемся в active и сразу забираем
-        switchToActivePolling();
-        await pollOnce(true);
+        // Есть команда — переключаемся в active.
+        // НЕ делаем pollOnce(true) здесь — ACTIVE_ALARM заберёт команду через 1 мин.
+        await switchToActivePolling();
       }
       // 204 — тишина, остаёмся в idle
       return;
@@ -125,11 +113,24 @@ async function executeCommand(command, payload, state) {
   console.warn('[alesa] unknown command:', command);
 }
 
-// ── Alarm listener (idle polling) ────────────────────────────────────────────
+// ── Alarm listener ────────────────────────────────────────────────────────────
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== IDLE_ALARM) return;
-  await pollOnce(false); // HEAD — лёгкая проверка
+  if (alarm.name === IDLE_ALARM) {
+    await pollOnce(false); // HEAD — лёгкая проверка
+    return;
+  }
+
+  if (alarm.name === ACTIVE_ALARM) {
+    // Проверяем таймаут active режима
+    const { activePollingStartedAt } = await chrome.storage.local.get('activePollingStartedAt');
+    if (!activePollingStartedAt || Date.now() - activePollingStartedAt > ACTIVE_TIMEOUT_MS) {
+      console.log('[alesa] active poll timeout — back to idle');
+      startIdlePolling();
+      return;
+    }
+    await pollOnce(true); // GET — забрать команду
+  }
 });
 
 // ── Install / startup ────────────────────────────────────────────────────────
@@ -204,9 +205,9 @@ async function handleMessage(msg) {
   if (msg.type === 'disconnect') {
     await setState({ pairingToken: null, paired: false });
     chrome.alarms.clear(IDLE_ALARM);
-    stopActivePolling();
+    chrome.alarms.clear(ACTIVE_ALARM);
+    await chrome.storage.local.remove(['pendingTokenRequest', 'activePollingStartedAt']);
     chrome.action.setBadgeText({ text: '' });
-    await chrome.storage.local.remove('pendingTokenRequest');
     return { ok: true };
   }
 
