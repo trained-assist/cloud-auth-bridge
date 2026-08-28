@@ -36,6 +36,17 @@
     "128": "icons/icon-128.png"
   },
 
-  "options_page": "options/options.html"
+  "options_page": "options/options.html",
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/oauth/authorize*",
+        "https://claude.com/cai/oauth/authorize*"
+      ],
+      "js": ["content/auto-authorize.js"],
+      "run_at": "document_idle"
+    }
+  ]
 
 }
