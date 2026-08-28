@@ -1,0 +1,50 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build ZIP
+        run: |
+          zip -r alesa-auth-extension-${{ github.ref_name }}.zip \
+            manifest.json \
+            background/ \
+            popup/ \
+            options/ \
+            content/ \
+            icons/ \
+            -x "*.DS_Store" -x "*/.git/*"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Alesa Auth ${{ github.ref_name }}
+          body: |
+            ## Установка
+
+            1. Скачай `alesa-auth-extension-${{ github.ref_name }}.zip`
+            2. Распакуй в любую папку
+            3. Открой Chrome → `chrome://extensions`
+            4. Включи **Режим разработчика** (правый верхний угол)
+            5. Нажми **Загрузить распакованное расширение** → выбери папку
+            6. В Telegram: `/chromeext_connect` → введи код в попапе расширения
+
+            ## Что нового
+            _см. коммиты_
+          files: alesa-auth-extension-${{ github.ref_name }}.zip
+          draft: false
+          prerelease: false
