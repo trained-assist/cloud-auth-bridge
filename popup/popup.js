@@ -144,6 +144,13 @@ $('btn-options').addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
 
+// ── Telegram link ─────────────────────────────────────────────────────────────
+
+document.getElementById('tg-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: 'tg://resolve?domain=super_personal_assistant_bot&start=chromeext_connect' });
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 refresh().catch(console.error);
