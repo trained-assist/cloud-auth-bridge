@@ -4,7 +4,7 @@
 //   - Idle: HEAD /poll каждые 3 минуты (chrome.alarms)
 //   - Active: GET /poll каждые 3 секунды (setInterval), макс 2 минуты, затем назад в idle
 
-const DEFAULT_RELAY = 'http://136.65.7.197:8081';
+const DEFAULT_RELAY = 'https://136-65-7-197.sslip.io';
 const IDLE_ALARM    = 'alesa-idle-poll';
 const ACTIVE_ALARM  = 'alesa-active-poll';
 const IDLE_PERIOD   = 3;   // минуты idle polling
