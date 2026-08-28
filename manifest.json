@@ -36,11 +36,4 @@
 
   "options_page": "options/options.html",
 
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content/interceptor.js"],
-      "run_at": "document_idle"
-    }
-  ]
 }

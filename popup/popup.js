@@ -60,6 +60,7 @@ async function renderSiteCard() {
   // Store current tab for token send
   $('btn-send-token').dataset.tabId = tab.id;
   $('btn-send-token').dataset.host = hostname;
+  $('btn-send-token').dataset.url = tab.url;
 }
 
 // ── Pair ──────────────────────────────────────────────────────────────────────
@@ -112,16 +113,10 @@ $('btn-send-token').addEventListener('click', async () => {
   btn.textContent = 'Передаю…';
 
   try {
-    // Ask content script to collect cookies for this tab's host
-    const tokenValue = await new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tabId, { type: 'getCookies' }, (res) => {
-        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (res?.error) return reject(new Error(res.error));
-        resolve(res?.cookies || '');
-      });
-    });
+    const url = btn.dataset.url;
+    const { cookies: tokenValue } = await sendBg({ type: 'getTabCookies', url });
 
-    if (!tokenValue) throw new Error('Не удалось получить данные со страницы');
+    if (!tokenValue) throw new Error('Куки не найдены — попробуй обновить страницу и авторизоваться заново');
 
     await sendBg({ type: 'sendToken', label: host, tokenValue });
     show(okEl);

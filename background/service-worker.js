@@ -4,7 +4,7 @@
 //   - Idle: HEAD /poll каждые 3 минуты (chrome.alarms)
 //   - Active: GET /poll каждые 3 секунды (setInterval), макс 2 минуты, затем назад в idle
 
-const DEFAULT_RELAY = 'http://localhost:8081';
+const DEFAULT_RELAY = 'http://136.65.7.197:8081';
 const IDLE_ALARM    = 'alesa-idle-poll';
 const ACTIVE_ALARM  = 'alesa-active-poll';
 const IDLE_PERIOD   = 3;   // минуты idle polling
@@ -209,6 +209,14 @@ async function handleMessage(msg) {
     await chrome.storage.local.remove(['pendingTokenRequest', 'activePollingStartedAt']);
     chrome.action.setBadgeText({ text: '' });
     return { ok: true };
+  }
+
+  // ── getTabCookies ─────────────────────────────────────────────────────────
+  if (msg.type === 'getTabCookies') {
+    if (!msg.url) throw new Error('url обязателен');
+    const cookies = await chrome.cookies.getAll({ url: msg.url });
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    return { cookies: cookieStr };
   }
 
   // ── setRelayUrl ───────────────────────────────────────────────────────────
