@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alesa Auth</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🤖</span>
+        <span class="logo-text">Alesa Auth</span>
+      </div>
+      <button class="btn-icon" id="btn-options" title="Настройки">⚙️</button>
+    </header>
+
+    <!-- UNPAIRED view -->
+    <div id="view-unpaired" class="view hidden">
+      <p class="hint">Введи код из Telegram-бота<br>(<code>/chromeext_connect</code>)</p>
+      <div class="code-input-row">
+        <input id="code-input" type="text" inputmode="numeric" maxlength="7"
+               placeholder="482 931" autocomplete="off" spellcheck="false">
+      </div>
+      <button id="btn-pair" class="btn-primary">Подключить</button>
+      <p id="pair-error" class="error hidden"></p>
+    </div>
+
+    <!-- PAIRED view -->
+    <div id="view-paired" class="view hidden">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span>Подключено</span>
+      </div>
+
+      <div id="current-site" class="site-card hidden">
+        <div class="site-label" id="site-label-text"></div>
+        <button id="btn-send-token" class="btn-primary">Передать токен</button>
+        <p id="send-error" class="error hidden"></p>
+        <p id="send-ok" class="ok hidden">✓ Токен передан</p>
+      </div>
+
+      <div id="no-site" class="no-site">
+        <p>Перейди на нужный сайт,<br>чтобы передать токен.</p>
+      </div>
+
+      <button id="btn-disconnect" class="btn-secondary">Отключить</button>
+    </div>
+
+    <!-- Loading -->
+    <div id="view-loading" class="view">
+      <div class="spinner"></div>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
