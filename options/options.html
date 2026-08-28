@@ -51,13 +51,22 @@
 </head>
 <body>
 
-  <h1><span>🤖</span> Alesa Auth — Настройки</h1>
+  <h1><span>🌉</span> Cloud Auth Bridge — Настройки</h1>
+
+  <div class="field">
+    <label for="profile-name">Имя профиля</label>
+    <input id="profile-name" type="text" placeholder="определится автоматически" maxlength="32">
+    <p class="hint" id="profile-hint">Загрузка…</p>
+    <p class="hint" style="margin-top:4px">Определяется автоматически по Google-аккаунту Chrome.<br>
+       Переопредели если нужно другое имя: <code>work</code>, <code>personal</code>.<br>
+       Токены идут с префиксом: <code>vladimir.figma</code>, <code>vladimir.github</code>.</p>
+  </div>
 
   <div class="field">
     <label for="relay-url">URL token-relay сервера</label>
     <input id="relay-url" type="url" placeholder="http://localhost:8081">
     <p class="hint">Локальный: <code>http://localhost:8081</code><br>
-       Через Cloudflare: <code>https://xxxx.trycloudflare.com</code></p>
+       Продакшн: <code>https://136-65-7-197.sslip.io</code></p>
   </div>
 
   <button id="btn-save">Сохранить</button>

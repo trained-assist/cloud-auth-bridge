@@ -13,7 +13,7 @@
     <header class="header">
       <div class="logo">
         <span class="logo-icon">🤖</span>
-        <span class="logo-text">Alesa Auth</span>
+        <span class="logo-text">Cloud Auth Bridge</span>
       </div>
       <button class="btn-icon hidden" id="btn-options" title="Настройки">⚙️</button>
     </header>
@@ -34,6 +34,7 @@
       <div class="status-badge">
         <span class="status-dot"></span>
         <span>Подключено</span>
+        <span id="profile-badge" class="profile-badge hidden"></span>
       </div>
 
       <div id="current-site" class="site-card hidden">
@@ -52,9 +53,11 @@
         <div class="quick-label">Быстрый захват</div>
         <div class="quick-buttons">
           <button class="btn-quick" data-url="https://github.com" data-after="github.com" data-label="github">GitHub</button>
-          <button class="btn-quick" data-url="https://claude.ai" data-after="claude.ai" data-label="claude">Claude</button>
-          <button class="btn-quick" data-url="https://accounts.google.com" data-after="myaccount.google.com" data-label="google">Google</button>
+          <button class="btn-quick" data-url="https://www.figma.com" data-after="figma.com" data-label="figma">Figma</button>
+          <button class="btn-quick" data-url="https://www.notion.so" data-after="notion.so" data-label="notion">Notion</button>
           <button class="btn-quick" data-url="https://linear.app" data-after="linear.app" data-label="linear">Linear</button>
+          <button class="btn-quick" data-url="https://tilda.cc" data-after="tilda.cc" data-label="tilda">Tilda</button>
+          <button class="btn-quick" data-url="https://claude.ai" data-after="claude.ai" data-label="claude">Claude</button>
         </div>
         <p id="quick-status" class="hint hidden"></p>
       </div>

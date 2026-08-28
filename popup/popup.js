@@ -31,6 +31,13 @@ function showView(state) {
     hide($('view-unpaired'));
     show($('view-paired'));
     renderSiteCard();
+    const badge = $('profile-badge');
+    if (state.profileName) {
+      badge.textContent = state.profileName;
+      show(badge);
+    } else {
+      hide(badge);
+    }
   } else {
     show($('view-unpaired'));
     hide($('view-paired'));
