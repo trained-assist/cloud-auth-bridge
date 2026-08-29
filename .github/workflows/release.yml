@@ -20,7 +20,7 @@ jobs:
 
       - name: Build ZIP
         run: |
-          zip -r cloud-auth-bridge-${{ github.ref_name }}.zip \
+          zip -r cloud-auth-bridge.zip \
             manifest.json \
             background/ \
             popup/ \
@@ -36,7 +36,7 @@ jobs:
           body: |
             ## Установка
 
-            1. Скачай `cloud-auth-bridge-${{ github.ref_name }}.zip`
+            1. Скачай `cloud-auth-bridge.zip`
             2. Распакуй в любую папку
             3. Открой Chrome → `chrome://extensions`
             4. Включи **Режим разработчика** (правый верхний угол)
@@ -45,6 +45,6 @@ jobs:
 
             ## Что нового
             _см. коммиты_
-          files: cloud-auth-bridge-${{ github.ref_name }}.zip
+          files: cloud-auth-bridge.zip
           draft: false
           prerelease: false
