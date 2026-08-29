@@ -59,6 +59,14 @@ const SERVICES = {
     optional: ['d', 'x'],
     jsExtract: true,  // flag: popup.js can warn user
   },
+
+  'nalog.ru': {
+    label: 'nalog',
+    captureUrl: 'https://lknpd.nalog.ru',
+    required: [],
+    optional: [],
+    fullDump: true,
+  },
 };
 
 // ── Core extraction logic ──────────────────────────────────────────────────────
