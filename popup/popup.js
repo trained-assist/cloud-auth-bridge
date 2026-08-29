@@ -123,7 +123,7 @@ $('btn-send-token').addEventListener('click', async () => {
     const url = btn.dataset.url;
     let tokenValue, label;
 
-    if (hostname.includes('nalog.ru')) {
+    if (host.includes('nalog.ru')) {
       // nalog.ru stores auth in sessionStorage, not cookies
       const [res] = await chrome.scripting.executeScript({
         target: { tabId },
