@@ -121,10 +121,31 @@ $('btn-send-token').addEventListener('click', async () => {
 
   try {
     const url = btn.dataset.url;
-    const { cookies: tokenValue } = await sendBg({ type: 'getCookies', url });
-    if (!tokenValue) throw new Error('Куки не найдены — попробуй обновить страницу и авторизоваться заново');
+    let tokenValue, label;
 
-    await sendBg({ type: 'sendToken', label: host, tokenValue });
+    if (hostname.includes('nalog.ru')) {
+      // nalog.ru stores auth in sessionStorage, not cookies
+      const [res] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => ({
+          auth_token:    sessionStorage.getItem('auth.token'),
+          refresh_token: sessionStorage.getItem('refresh.token'),
+          expires:       sessionStorage.getItem('auth.token.expires'),
+        }),
+      });
+      const data = res.result;
+      if (!data.auth_token && !data.refresh_token)
+        throw new Error('Токен не найден — убедись что ты залогинен на nalog.ru');
+      tokenValue = JSON.stringify(data);
+      label = 'nalog';
+    } else {
+      const got = await sendBg({ type: 'getCookies', url });
+      tokenValue = got.cookies;
+      label = host;
+      if (!tokenValue) throw new Error('Куки не найдены — попробуй обновить страницу и авторизоваться заново');
+    }
+
+    await sendBg({ type: 'sendToken', label, tokenValue });
     show(okEl);
     setTimeout(() => hide(okEl), 3000);
   } catch (e) {
