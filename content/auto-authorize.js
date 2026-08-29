@@ -8,7 +8,7 @@ function tryClick() {
   const buttons = [...document.querySelectorAll('button')];
   const authBtn = buttons.find(b => /^authorize$/i.test(b.textContent.trim()));
   if (authBtn) {
-    console.log('[alesa] auto-clicking Authorize');
+    console.log('[cab] auto-clicking Authorize');
     authBtn.click();
     return true;
   }

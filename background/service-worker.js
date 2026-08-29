@@ -5,8 +5,8 @@
 importScripts('extractors.js');
 
 const DEFAULT_RELAY = 'https://136-65-7-197.sslip.io';
-const IDLE_ALARM    = 'alesa-idle-poll';
-const ACTIVE_ALARM  = 'alesa-active-poll';
+const IDLE_ALARM    = 'cab-idle-poll';
+const ACTIVE_ALARM  = 'cab-active-poll';
 const IDLE_PERIOD   = 3;   // минуты
 const ACTIVE_PERIOD = 1;   // минуты (MV3 minimum)
 const ACTIVE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -37,7 +37,7 @@ async function setState(patch) {
 async function debugToRelay(step, detail, state) {
   const s = state || await getState().catch(() => null);
   if (!s?.pairingToken) return;
-  console.log(`[alesa] ${step}: ${detail}`);
+  console.log(`[cab] ${step}: ${detail}`);
   try {
     await fetch(`${s.relayUrl}/debug`, {
       method: 'POST',
@@ -103,7 +103,7 @@ async function switchToActivePolling() {
   chrome.alarms.clear(IDLE_ALARM);
   await chrome.storage.local.set({ activePollingStartedAt: Date.now() });
   chrome.alarms.create(ACTIVE_ALARM, { periodInMinutes: ACTIVE_PERIOD });
-  console.log('[alesa] switched to active polling (1 min)');
+  console.log('[cab] switched to active polling (1 min)');
 }
 
 async function pollOnce(getCommand = false) {
@@ -136,14 +136,14 @@ async function pollOnce(getCommand = false) {
       await executeCommand(command, payload, state);
     }
   } catch (e) {
-    console.warn('[alesa] poll error:', e.message);
+    console.warn('[cab] poll error:', e.message);
   }
 }
 
 // ── Command execution ────────────────────────────────────────────────────────
 
 async function executeCommand(command, payload, state) {
-  console.log(`[alesa] executing command="${command}"`, payload);
+  console.log(`[cab] executing command="${command}"`, payload);
 
   if (command === 'fetch_token') {
     const site = payload?.site || '';
@@ -198,7 +198,7 @@ async function executeCommand(command, payload, state) {
     return;
   }
 
-  console.warn('[alesa] unknown command:', command);
+  console.warn('[cab] unknown command:', command);
 }
 
 // ── Capture and send ─────────────────────────────────────────────────────────
@@ -239,12 +239,12 @@ async function captureAndSend({ tabId, tabUrl, captureType, label, state }) {
     }
 
     await debugToRelay('capture_ok', `label=${finalLabel}`, state);
-    console.log(`[alesa] captured and sent token for "${finalLabel}"`);
+    console.log(`[cab] captured and sent token for "${finalLabel}"`);
     chrome.action.setBadgeText({ text: '✓' });
     setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
 
   } catch (e) {
-    console.error('[alesa] captureAndSend error:', e.message);
+    console.error('[cab] captureAndSend error:', e.message);
     await debugToRelay('capture_error', e.message, state);
     const s = await getState();
     if (s.pairingToken) {
@@ -272,7 +272,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ACTIVE_ALARM) {
     const { activePollingStartedAt } = await chrome.storage.local.get('activePollingStartedAt');
     if (!activePollingStartedAt || Date.now() - activePollingStartedAt > ACTIVE_TIMEOUT_MS) {
-      console.log('[alesa] active poll timeout — back to idle');
+      console.log('[cab] active poll timeout — back to idle');
       startIdlePolling();
       return;
     }
@@ -387,7 +387,7 @@ async function handleMessage(msg) {
         await new Promise(r => setTimeout(r, 1000));
         await captureAndSend({ tabId: tab.id, tabUrl: finalUrl, captureType, label: captureLabel, state });
       } catch (e) {
-        console.error('[alesa] captureUrl error:', e.message);
+        console.error('[cab] captureUrl error:', e.message);
       }
     })();
 

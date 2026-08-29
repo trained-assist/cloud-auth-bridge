@@ -20,7 +20,7 @@ jobs:
 
       - name: Build ZIP
         run: |
-          zip -r alesa-auth-extension-${{ github.ref_name }}.zip \
+          zip -r cloud-auth-bridge-${{ github.ref_name }}.zip \
             manifest.json \
             background/ \
             popup/ \
@@ -32,11 +32,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Alesa Auth ${{ github.ref_name }}
+          name: Cloud Auth Bridge ${{ github.ref_name }}
           body: |
             ## Установка
 
-            1. Скачай `alesa-auth-extension-${{ github.ref_name }}.zip`
+            1. Скачай `cloud-auth-bridge-${{ github.ref_name }}.zip`
             2. Распакуй в любую папку
             3. Открой Chrome → `chrome://extensions`
             4. Включи **Режим разработчика** (правый верхний угол)
@@ -45,6 +45,6 @@ jobs:
 
             ## Что нового
             _см. коммиты_
-          files: alesa-auth-extension-${{ github.ref_name }}.zip
+          files: cloud-auth-bridge-${{ github.ref_name }}.zip
           draft: false
           prerelease: false
