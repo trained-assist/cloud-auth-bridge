@@ -42,12 +42,13 @@ const SERVICES = {
   },
 
   // Auth cookies live on tilda.ru (dashboard), not tilda.cc (marketing site).
-  // userid + hash are the session identifiers needed for internal API calls.
+  // Exact cookie names vary — dump all and let the API validate auth.
   'tilda.ru': {
     label: 'tilda-session',
     captureUrl: 'https://tilda.ru/projects/',
-    required: ['userid', 'hash'],
-    optional: ['tildauserid', 'phpbb3_user_sid', 'PHPSESSID'],
+    required: [],
+    optional: [],
+    fullDump: true,
   },
 
   'tilda.cc': {
