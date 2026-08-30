@@ -152,6 +152,36 @@ body {
 .btn-quick:disabled { opacity: .5; cursor: default; }
 .hint { font-size: 11px; color: var(--muted); line-height: 1.4; }
 
+/* ── Manual token section ────────────────────────────────────────────────── */
+.manual-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.input-select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+.input-token {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  box-sizing: border-box;
+}
+.input-token:focus, .input-select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
 /* ── Messages ────────────────────────────────────────────────────────────── */
 .error { color: var(--red); font-size: 12px; text-align: center; }
 .ok    { color: var(--green); font-size: 12px; text-align: center; }

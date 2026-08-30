@@ -63,6 +63,23 @@
         <p id="quick-status" class="hint hidden"></p>
       </div>
 
+      <!-- Manual token paste (for API keys that aren't in cookies) -->
+      <div class="manual-section">
+        <div class="quick-label">API токен вручную</div>
+        <select id="manual-label" class="input-select">
+          <option value="weeek">Weeek CRM</option>
+          <option value="dadata">DaData</option>
+          <option value="yandex-metrica">Yandex Metrica</option>
+          <option value="wordstat">Wordstat</option>
+          <option value="getcourse">GetCourse</option>
+        </select>
+        <input id="manual-token" type="password" class="input-token"
+               placeholder="Вставь API токен…" autocomplete="off" spellcheck="false">
+        <button id="btn-manual-send" class="btn-primary">Передать</button>
+        <p id="manual-error" class="error hidden"></p>
+        <p id="manual-ok" class="ok hidden">✓ Токен передан</p>
+      </div>
+
       <button id="btn-disconnect" class="btn-secondary">Отключить</button>
     </div>
 

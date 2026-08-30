@@ -201,6 +201,37 @@ document.querySelectorAll('.btn-quick').forEach(btn => {
   });
 });
 
+// ── Manual token paste ────────────────────────────────────────────────────────
+
+$('btn-manual-send').addEventListener('click', async () => {
+  const btn = $('btn-manual-send');
+  const errEl = $('manual-error');
+  const okEl = $('manual-ok');
+  const label = $('manual-label').value;
+  const tokenValue = $('manual-token').value.trim();
+
+  hide(errEl); hide(okEl);
+  if (!tokenValue) {
+    errEl.textContent = 'Вставь токен';
+    return show(errEl);
+  }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    await sendBg({ type: 'sendToken', label, tokenValue });
+    $('manual-token').value = '';
+    show(okEl);
+    setTimeout(() => hide(okEl), 3000);
+  } catch (e) {
+    errEl.textContent = e.message;
+    show(errEl);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Передать';
+  }
+});
+
 // ── Disconnect ────────────────────────────────────────────────────────────────
 
 $('btn-disconnect').addEventListener('click', async () => {
