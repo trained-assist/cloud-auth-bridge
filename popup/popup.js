@@ -160,7 +160,7 @@ $('btn-send-token').addEventListener('click', async () => {
     } else {
       const got = await sendBg({ type: 'getCookies', url });
       tokenValue = got.cookies;
-      label = host;
+      label = got.label || host;  // use service-specific label from extractors.js
       if (!tokenValue) throw new Error('Куки не найдены — попробуй обновить страницу и авторизоваться заново');
     }
 
