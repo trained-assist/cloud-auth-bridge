@@ -41,10 +41,18 @@ const SERVICES = {
     fullDump: true,
   },
 
+  // Auth cookies live on tilda.ru (dashboard), not tilda.cc (marketing site).
+  // userid + hash are the session identifiers needed for internal API calls.
+  'tilda.ru': {
+    label: 'tilda-session',
+    captureUrl: 'https://tilda.ru/projects/',
+    required: ['userid', 'hash'],
+    optional: ['tildauserid', 'phpbb3_user_sid', 'PHPSESSID'],
+  },
+
   'tilda.cc': {
-    label: 'tilda',
+    label: 'tilda-session',
     captureUrl: 'https://tilda.cc',
-    // UNVERIFIED — capture all; inspect with DevTools and update required[] later
     required: [],
     optional: [],
     fullDump: true,
