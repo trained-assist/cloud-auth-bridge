@@ -124,23 +124,31 @@ $('btn-send-token').addEventListener('click', async () => {
     let tokenValue, label;
 
     if (host.includes('nalog.ru')) {
-      // nalog.ru stores auth in sessionStorage, not cookies
+      // nalog.ru stores auth in sessionStorage; deviceId in localStorage
       const [res] = await chrome.scripting.executeScript({
         target: { tabId },
         func: () => {
-          // Dump all sessionStorage keys — capture deviceSource and anything else useful
-          const dump = {};
+          const ss = {};
           for (let i = 0; i < sessionStorage.length; i++) {
             const k = sessionStorage.key(i);
-            dump[k] = sessionStorage.getItem(k);
+            ss[k] = sessionStorage.getItem(k);
           }
+          const ls = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            ls[k] = localStorage.getItem(k);
+          }
+          // deviceId is bound to the refreshToken — required for auto-refresh
+          const deviceId =
+            ls['deviceId'] || ls['device_id'] || ls['sourceDeviceId'] ||
+            ss['auth.token.device-source'] || ss['deviceSource'] || null;
           return {
-            auth_token:    dump['auth.token'],
-            refresh_token: dump['refresh.token'],
-            expires:       dump['auth.token.expires'],
-            device_source: dump['auth.token.device-source'] || dump['deviceSource'] || dump['device_source'] || null,
-            // full dump for debugging unknown keys
-            _all_keys: Object.keys(dump),
+            auth_token:    ss['auth.token'],
+            refresh_token: ss['refresh.token'],
+            expires:       ss['auth.token.expires'],
+            device_id:     deviceId,
+            _all_ss_keys:  Object.keys(ss),
+            _all_ls_keys:  Object.keys(ls),
           };
         },
       });
