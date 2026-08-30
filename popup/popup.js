@@ -127,11 +127,22 @@ $('btn-send-token').addEventListener('click', async () => {
       // nalog.ru stores auth in sessionStorage, not cookies
       const [res] = await chrome.scripting.executeScript({
         target: { tabId },
-        func: () => ({
-          auth_token:    sessionStorage.getItem('auth.token'),
-          refresh_token: sessionStorage.getItem('refresh.token'),
-          expires:       sessionStorage.getItem('auth.token.expires'),
-        }),
+        func: () => {
+          // Dump all sessionStorage keys — capture deviceSource and anything else useful
+          const dump = {};
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const k = sessionStorage.key(i);
+            dump[k] = sessionStorage.getItem(k);
+          }
+          return {
+            auth_token:    dump['auth.token'],
+            refresh_token: dump['refresh.token'],
+            expires:       dump['auth.token.expires'],
+            device_source: dump['auth.token.device-source'] || dump['deviceSource'] || dump['device_source'] || null,
+            // full dump for debugging unknown keys
+            _all_keys: Object.keys(dump),
+          };
+        },
       });
       const data = res.result;
       if (!data.auth_token && !data.refresh_token)
